@@ -1,0 +1,20 @@
+{
+  "name": "nostr-tweet-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@nostr-dev-kit/ndk": "^2.3.1",
+    "@prisma/client": "^5.7.1",
+    "express": "^4.18.2",
+    "nostr-tools": "^1.17.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.7.1"
+  }
+}
