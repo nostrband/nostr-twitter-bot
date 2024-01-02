@@ -5,9 +5,8 @@ const publishTweetAsNostrEvent = require('./nostrService');
 
 async function process() {
   const users = await prisma.username.findMany();
-  console.log(users, 'USERS');
   for (const user of users) {
-    const tweets = await getTweets(user.username); // Предполагаем, что функция возвращает массив твитов
+    const tweets = await getTweets(user.username);
     for (const tweet of tweets) {
       const eventResult = await publishTweetAsNostrEvent(tweet, user.secretKey);
       await prisma.history.create({
@@ -21,6 +20,7 @@ async function process() {
     }
     await new Promise((resolve) => setTimeout(resolve, 10000));
   }
+  setTimeout(process, 0);
 }
 
 module.exports = {
