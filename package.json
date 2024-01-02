@@ -12,6 +12,7 @@
     "@nostr-dev-kit/ndk": "^2.3.2",
     "@prisma/client": "^5.7.1",
     "axios": "^1.6.3",
+    "cheerio": "^1.0.0-rc.12",
     "express": "^4.18.2",
     "nostr-tools": "^1.17.0"
   },

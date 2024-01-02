@@ -5,6 +5,7 @@ const publishTweetAsNostrEvent = require('./nostrService');
 
 async function process() {
   const users = await prisma.username.findMany();
+  console.log(users, 'USSEEEERRS');
   for (const user of users) {
     const tweets = await getTweets(user.username);
     for (const tweet of tweets) {
