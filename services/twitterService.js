@@ -1,6 +1,9 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { NDKEvent } = require('@nostr-dev-kit/ndk');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
 
 async function getTweets(username) {
   try {
@@ -13,20 +16,27 @@ async function getTweets(username) {
     const tweetsData = JSON.parse(scriptContent);
     const tweets = tweetsData.props.pageProps.timeline.entries;
 
-    return tweets
-      .map((entry) => {
-        if (entry.type === 'tweet') {
-          const tweet = entry.content.tweet;
+    const newTweets = [];
+    for (const entry of tweets) {
+      if (entry.type === 'tweet') {
+        const tweet = entry.content.tweet;
+        const isAlreadyImported = await prisma.history.findFirst({
+          where: {
+            tweetId: tweet.id,
+          },
+        });
+        if (!isAlreadyImported) {
           const nostrEvent = new NDKEvent();
           nostrEvent.content = tweet.full_text || tweet.text;
           nostrEvent.kind = 1;
           nostrEvent.created_at = new Date(tweet.created_at).getTime() / 1000;
           nostrEvent.tags = [['i', `twitter:${tweet.id}`]];
-
-          return nostrEvent;
+          newTweets.push(nostrEvent);
         }
-      })
-      .filter(Boolean);
+      }
+    }
+
+    return newTweets;
   } catch (error) {
     console.error('Ошибка при получении твитов:', error);
     return [];
