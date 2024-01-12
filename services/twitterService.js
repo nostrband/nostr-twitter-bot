@@ -11,11 +11,9 @@ async function getTweets(username) {
       `https://syndication.twitter.com/srv/timeline-profile/screen-name/${username}`
     );
     const $ = cheerio.load(response.data);
-
     const scriptContent = $('#__NEXT_DATA__').html();
     const tweetsData = JSON.parse(scriptContent);
     const tweets = tweetsData.props.pageProps.timeline.entries;
-
     const newTweets = [];
     for (const entry of tweets) {
       if (entry.type === 'tweet') {

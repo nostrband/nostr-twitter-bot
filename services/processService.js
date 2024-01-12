@@ -43,7 +43,6 @@ async function process() {
   const users = await prisma.username.findMany();
   for (const user of users) {
     const tweets = await getTweets('jack');
-
     for (const tweet of tweets) {
       const mentionedPubkeys = await fetchMentionedPubkeysForTweet(tweet);
       const eventResult = await publishTweetAsNostrEvent(
