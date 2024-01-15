@@ -3,7 +3,7 @@ const express = require('express');
 const addRoute = require('./routes/add');
 const listRoute = require('./routes/list');
 const historyRoute = require('./routes/history');
-const processTweets = require('./services/processService').process;
+const { process: processTweets } = require('./services/processService');
 
 const app = express();
 app.use(express.json());

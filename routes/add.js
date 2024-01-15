@@ -1,5 +1,5 @@
 const express = require('express');
-const addUsername = require('../services/userService');
+const { addUsername } = require('../services/userService');
 const router = express.Router();
 
 router.post('/', async (req, res) => {

@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const getTweets = require('./twitterService');
+const { getTweets } = require('./twitterService');
 const publishTweetAsNostrEvent = require('./nostrService');
 
 let mentionedPubkeysCache = {};
@@ -42,7 +42,10 @@ async function fetchMentionedPubkeysForTweet(tweet) {
 async function process() {
   const users = await prisma.username.findMany();
   for (const user of users) {
-    const tweets = await getTweets('jack');
+    console.log("loading tweets for ", user.username);
+    const tweets = await getTweets(user.username);
+    console.log("got tweets for ", user.username, tweets.length);
+    
     for (const tweet of tweets) {
       const mentionedPubkeys = await fetchMentionedPubkeysForTweet(tweet);
       const eventResult = await publishTweetAsNostrEvent(
@@ -59,7 +62,7 @@ async function process() {
         },
       });
     }
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   setTimeout(process, 0);
 }

@@ -14,13 +14,14 @@ async function getTweets(username) {
     const scriptContent = $('#__NEXT_DATA__').html();
     const tweetsData = JSON.parse(scriptContent);
     const tweets = tweetsData.props.pageProps.timeline.entries;
+    console.log("tweets", tweets.length)
     const newTweets = [];
     for (const entry of tweets) {
       if (entry.type === 'tweet') {
         const tweet = entry.content.tweet;
         const isAlreadyImported = await prisma.history.findFirst({
           where: {
-            tweetId: tweet.id,
+            tweetId: tweet.id_str,
           },
         });
         if (!isAlreadyImported) {
@@ -36,7 +37,7 @@ async function getTweets(username) {
 
     return newTweets;
   } catch (error) {
-    console.error('Ошибка при получении твитов:', error);
+    console.error('Error getting tweets for ', username, error);
     return [];
   }
 }

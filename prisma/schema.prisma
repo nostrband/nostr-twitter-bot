@@ -1,7 +1,7 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.0.x"]
 }
-DATABASE_URL="file:./temp.db"
 
 datasource db {
   provider = "sqlite"

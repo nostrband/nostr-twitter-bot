@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { generatePrivateKey } = require('nostr-tools');
 
 async function addUsername(username, relays) {
   let user = await prisma.username.findUnique({
@@ -24,6 +25,7 @@ async function addUsername(username, relays) {
       data: {
         username,
         relays: relays.join(','),
+        secretKey: generatePrivateKey()
       },
       select: {
         username: true,
