@@ -1,61 +1,42 @@
-const { NDKEvent, NDKPrivateKeySigner } = require('@nostr-dev-kit/ndk');
-const { getPublicKey, nip19 } = require('nostr-tools');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { NDKEvent } = require('@nostr-dev-kit/ndk');
+const { PrismaClient } = require('@prisma/client');
 
-function convertToTimestamp(dateString) {
-  const dateObject = new Date(dateString);
-  return Math.floor(dateObject.getTime() / 1000);
-}
+const prisma = new PrismaClient();
 
-async function processUserMentions(tweet, mentionedPubkeys) {
-  const mentions = [];
-  for (const user of tweet.entities.user_mentions) {
-    const pubkey = mentionedPubkeys[user.screen_name];
-    if (pubkey) {
-      const nostrProfileLink = `nostr:${nip19.nprofileEncode({
-        pubkey,
-        relays: ['wss://your-relay.com'],
-      })}`;
-      mentions.push({ screenName: user.screen_name, nostrProfileLink });
-    }
-  }
-  return mentions;
-}
-
-async function publishTweetAsNostrEvent(
-  tweet,
-  nostrPrivateKey,
-  mentionedPubkeys
-) {
-  const signer = new NDKPrivateKeySigner(nostrPrivateKey);
-  const pubkey = getPublicKey(nostrPrivateKey);
-
-  let content = tweet.text;
-
-  const mentions = await processUserMentions(tweet, mentionedPubkeys);
-  mentions.forEach((mention) => {
-    content = content.replace(
-      `@${mention.screenName}`,
-      mention.nostrProfileLink
+async function getTweets(username) {
+  try {
+    const response = await axios.get(
+      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${username}`
     );
-  });
+    const $ = cheerio.load(response.data);
+    const scriptContent = $('#__NEXT_DATA__').html();
+    const tweetsData = JSON.parse(scriptContent);
+    const tweets = tweetsData.props.pageProps.timeline.entries;
+    console.log('tweets', tweets.length);
+    const newTweets = [];
+    for (const entry of tweets) {
+      if (entry.type === 'tweet') {
+        const tweet = entry.content.tweet;
+        const isAlreadyImported = await prisma.history.findFirst({
+          where: {
+            tweetId: tweet.id_str,
+          },
+        });
+        if (!isAlreadyImported) {
+          newTweets.push(tweet);
+        }
+      }
+    }
 
-  tweet.entities.urls.forEach((url) => {
-    content = content.replace(url.url, url.expanded_url);
-  });
-
-  const ndkEvent = new NDKEvent({
-    pubkey: pubkey,
-    created_at: convertToTimestamp(tweet.created_at),
-    content: content,
-    kind: 1,
-  });
-
-  await ndkEvent.sign(signer);
-
-  const result = await ndkEvent.publish();
-  return result;
+    return newTweets;
+  } catch (error) {
+    console.error('Error getting tweets for ', username, error);
+    return [];
+  }
 }
 
 module.exports = {
-  publishTweetAsNostrEvent,
+  getTweets,
 };
