@@ -30,10 +30,7 @@ async function processUserMentions(tweet, mentionedPubkeys) {
       const nostrProfileLink = `nostr:${nip19.nprofileEncode({
         pubkey,
         relays: [
-          'wss://relay.nostr.band/all',
-          'wss://nos.lol',
-          'wss://relay.damus.io',
-          'wss://nostr.mutinywallet.com',
+          'wss://relay.nostr.band/'
         ],
       })}`;
       mentions.push({ screenName: user.screen_name, nostrProfileLink });
