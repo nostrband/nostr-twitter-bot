@@ -59,8 +59,6 @@ async function process() {
         mentionedPubkeys
       );
 
-      console.log(eventResult, 'EVEEEENT RESULT TEST ');
-
       if (eventResult) {
         await prisma.history.create({
           data: {
