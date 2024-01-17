@@ -2,7 +2,10 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const axios = require('axios');
 const { getTweets } = require('./twitterService');
-const { start: startNostr, publishTweetAsNostrEvent } = require('./nostrService');
+const {
+  start: startNostr,
+  publishTweetAsNostrEvent,
+} = require('./nostrService');
 
 let mentionedPubkeysCache = {};
 
@@ -22,10 +25,8 @@ async function fetchMentionedPubkey(screenName) {
   } catch (error) {
     if (error.response.status !== 404)
       console.error('Error fetching mentioned profile', error);
-    else
-      console.log("not found nostr acc for", screenName)
+    else console.log('not found nostr acc for', screenName);
   }
-
   return null;
 }
 
@@ -49,9 +50,7 @@ async function process() {
     console.log('loading tweets for ', user.username);
     const tweets = await getTweets(user.username);
     console.log('got tweets for ', user.username, tweets.length);
-
-    await startNostr(user.relays)
-
+    await startNostr(user.relays);
     for (const tweet of tweets) {
       const mentionedPubkeys = await fetchMentionedPubkeysForTweet(tweet);
       const eventResult = await publishTweetAsNostrEvent(
@@ -59,14 +58,21 @@ async function process() {
         user.secretKey,
         mentionedPubkeys
       );
-      await prisma.history.create({
-        data: {
-          tweetId: tweet.id_str,
-          username: user.username,
-          timestamp: new Date(),
-          eventId: eventResult.id,
-        },
-      });
+
+      console.log(eventResult, 'EVEEEENT RESULT TEST ');
+
+      if (eventResult) {
+        await prisma.history.create({
+          data: {
+            tweetId: tweet.id_str,
+            username: user.username,
+            timestamp: new Date(),
+            eventId: eventResult.id,
+          },
+        });
+      } else {
+        console.error('Failed to publish Nostr event for tweet:', tweet.id_str);
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }

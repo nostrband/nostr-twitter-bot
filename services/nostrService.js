@@ -1,18 +1,20 @@
-const { default: NDK, NDKEvent, NDKPrivateKeySigner } = require('@nostr-dev-kit/ndk');
+const {
+  default: NDK,
+  NDKEvent,
+  NDKPrivateKeySigner,
+} = require('@nostr-dev-kit/ndk');
 const { getPublicKey, nip19 } = require('nostr-tools');
 
-let ndk = null
+let ndk = null;
 
 async function start(relays) {
-
   if (ndk) {
-    for (const r of ndk.pool.relays.values())
-      r.disconnect()
+    for (const r of ndk.pool.relays.values()) r.disconnect();
   }
 
   ndk = new NDK({
-    explicitRelayUrls: relays
-  })
+    explicitRelayUrls: relays,
+  });
 }
 
 function convertToTimestamp(dateString) {
@@ -27,8 +29,12 @@ async function processUserMentions(tweet, mentionedPubkeys) {
     if (pubkey) {
       const nostrProfileLink = `nostr:${nip19.nprofileEncode({
         pubkey,
-// FIXME which relay?        
-        relays: ['wss://your-relay.com'],
+        relays: [
+          'wss://relay.nostr.band/all',
+          'wss://nos.lol',
+          'wss://relay.damus.io',
+          'wss://nostr.mutinywallet.com',
+        ],
       })}`;
       mentions.push({ screenName: user.screen_name, nostrProfileLink });
     }
@@ -67,8 +73,8 @@ async function publishTweetAsNostrEvent(
 
   await ndkEvent.sign(signer);
 
-  console.log("tweet", tweet, "event", ndkEvent.rawEvent())
-// FIXME publish when we're done formatting the tweets
+  console.log('tweet', tweet, 'event', ndkEvent.rawEvent());
+  // FIXME publish when we're done formatting the tweets
   //  const result = await ndkEvent.publish();
   const result = null; // { id: ndkEvent.id };
   return result;
@@ -76,5 +82,5 @@ async function publishTweetAsNostrEvent(
 
 module.exports = {
   publishTweetAsNostrEvent,
-  start
+  start,
 };

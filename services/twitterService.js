@@ -1,36 +1,48 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
-const { NDKEvent } = require('@nostr-dev-kit/ndk');
+const xml2js = require('xml2js');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-async function getTweets(username) {
+function parseDate(dateString) {
+  return new Date(dateString).getTime();
+}
+
+function extractIdFromGuid(guid) {
+  const match = guid.match(/status\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
   try {
     const response = await axios.get(
-      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${username}`
+      `${nitterUrl}/${username}/with_replies/rss`
     );
-    const $ = cheerio.load(response.data);
-    const scriptContent = $('#__NEXT_DATA__').html();
-    const tweetsData = JSON.parse(scriptContent);
-    const tweets = tweetsData.props.pageProps.timeline.entries;
-    console.log('tweets', tweets.length);
-    const newTweets = [];
-    for (const entry of tweets) {
-      if (entry.type === 'tweet') {
-        const tweet = entry.content.tweet;
-        const isAlreadyImported = await prisma.history.findFirst({
-          where: {
-            tweetId: tweet.id_str,
+    const parser = new xml2js.Parser({ trim: true });
+    const result = await parser.parseStringPromise(response.data);
+    const items = result.rss.channel[0].item;
+    const tweets = [];
+
+    for (const item of items) {
+      const tweetId = extractIdFromGuid(item.guid[0]);
+      const isAlreadyImported = await prisma.history.findFirst({
+        where: {
+          tweetId: tweetId,
+        },
+      });
+      if (!isAlreadyImported) {
+        tweets.push({
+          id_str: tweetId,
+          text: item.title[0],
+          created_at: parseDate(item.pubDate[0]),
+          entities: {
+            urls: [],
+            user_mentions: [],
           },
         });
-        if (!isAlreadyImported) {
-          newTweets.push(tweet);
-        }
       }
     }
-
-    return newTweets;
+    return tweets;
   } catch (error) {
     console.error('Error getting tweets for ', username, error);
     return [];
