@@ -87,7 +87,7 @@ async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
           },
         };
         tweets.push(tweet);
-        const event = await createEvent(tweet, 'Ваше_Имя_Пользователя');
+        const event = await createEvent(tweet, 'user_name');
         console.log(event);
       }
     }
