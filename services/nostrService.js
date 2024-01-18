@@ -29,9 +29,7 @@ async function processUserMentions(tweet, mentionedPubkeys) {
     if (pubkey) {
       const nostrProfileLink = `nostr:${nip19.nprofileEncode({
         pubkey,
-        relays: [
-          'wss://relay.nostr.band/'
-        ],
+        relays: ['wss://relay.nostr.band/'],
       })}`;
       mentions.push({ screenName: user.screen_name, nostrProfileLink });
     }

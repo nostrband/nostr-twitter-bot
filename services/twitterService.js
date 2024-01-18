@@ -1,6 +1,8 @@
 const axios = require('axios');
 const xml2js = require('xml2js');
 const { PrismaClient } = require('@prisma/client');
+const { nip19 } = require('nostr-tools');
+const { fetchMentionedPubkey } = require('./common');
 
 const prisma = new PrismaClient();
 
@@ -11,6 +13,45 @@ function parseDate(dateString) {
 function extractIdFromGuid(guid) {
   const match = guid.match(/status\/(\d+)/);
   return match ? match[1] : null;
+}
+
+function extractHashtags(text) {
+  const regex = /#\w+/g;
+  return text.match(regex) || [];
+}
+
+function extractUserMentions(text) {
+  const regex = /@\w+/g;
+  return text.match(regex) || [];
+}
+
+async function createEvent(tweet, myScreenName) {
+  const url = `https://twitter.com/${myScreenName}/status/${tweet.id_str}`;
+  const event = {
+    content: tweet.text,
+    tags: [
+      ['proxy', url, 'web'],
+      ['i', `twitter:${tweet.id_str}`],
+    ],
+  };
+
+  for (const hashtag of tweet.entities.hashtags) {
+    event.tags.push(['t', hashtag.text]);
+  }
+
+  for (const user of tweet.entities.user_mentions) {
+    if (user.id_str === '-1') continue;
+    const pubkey = await fetchMentionedPubkey(user.screen_name);
+    let link = '';
+    if (pubkey)
+      link = `nostr:${nip19.nprofileEncode({
+        pubkey,
+        relays: [OUTBOX_RELAY],
+      })}`;
+    if (link) event.content = event.content.replace(user.screen_name, link);
+  }
+
+  return event;
 }
 
 async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
@@ -31,15 +72,23 @@ async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
         },
       });
       if (!isAlreadyImported) {
-        tweets.push({
+        const text = item.title[0];
+        const tweet = {
           id_str: tweetId,
-          text: item.title[0],
+          text: text,
           created_at: parseDate(item.pubDate[0]),
           entities: {
-            urls: [],
-            user_mentions: [],
+            hashtags: extractHashtags(text).map((tag) => ({
+              text: tag.substring(1),
+            })),
+            user_mentions: extractUserMentions(text).map((mention) => ({
+              screen_name: mention.substring(1),
+            })),
           },
-        });
+        };
+        tweets.push(tweet);
+        const event = await createEvent(tweet, 'Ваше_Имя_Пользователя');
+        console.log(event);
       }
     }
     return tweets;
