@@ -35,7 +35,8 @@ async function process() {
       const eventResult = await publishTweetAsNostrEvent(
         tweet,
         user.secretKey,
-        mentionedPubkeys
+        mentionedPubkeys,
+        user.username
       );
 
       if (eventResult) {
