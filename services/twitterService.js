@@ -13,6 +13,11 @@ function extractIdFromGuid(guid) {
   return match ? match[1] : null;
 }
 
+function extractAuthorFromGuid(guid) {
+  const match = guid.match(/\/(\w+)\/status/);
+  return match ? match[1] : null;
+}
+
 function extractHashtags(text) {
   const regex = /#\w+/g;
   return text.match(regex) || [];
@@ -35,13 +40,20 @@ async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
 
     for (const item of items) {
       const tweetId = extractIdFromGuid(item.guid[0]);
+      const author = extractAuthorFromGuid(item.guid[0]);
       const isAlreadyImported = await prisma.history.findFirst({
         where: {
           tweetId: tweetId,
         },
       });
       if (!isAlreadyImported) {
-        const text = item.title[0];
+        let text = item.title[0];
+
+        const RT = `RT by @${username}`
+        if (author != username && text.startsWith(RT)) {
+          text = text.replace(RT, `RT @${author}`)
+        }
+
         const tweet = {
           id_str: tweetId,
           text: text,
