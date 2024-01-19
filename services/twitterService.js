@@ -1,6 +1,6 @@
-const axios = require('axios');
-const xml2js = require('xml2js');
-const { PrismaClient } = require('@prisma/client');
+const axios = require("axios");
+const xml2js = require("xml2js");
+const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
@@ -18,6 +18,11 @@ function extractAuthorFromGuid(guid) {
   return match ? match[1] : null;
 }
 
+function extractParentAuthorFromText(text) {
+  const match = text.match(/R to @(\w+):/);
+  return match ? match[1] : null;
+}
+
 function extractHashtags(text) {
   const regex = /#\w+/g;
   return text.match(regex) || [];
@@ -28,7 +33,11 @@ function extractUserMentions(text) {
   return text.match(regex) || [];
 }
 
-async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
+function formatTweetUrl(username, id) {
+  return `https://twitter.com/${username}/status/${id}`;
+}
+
+async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
   try {
     const response = await axios.get(
       `${nitterUrl}/${username}/with_replies/rss`
@@ -49,13 +58,34 @@ async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
       if (!isAlreadyImported) {
         let text = item.title[0];
 
-        const RT = `RT by @${username}`
+        const RT = `RT by @${username}`;
         if (author != username && text.startsWith(RT)) {
-          text = text.replace(RT, `RT @${author}`)
+          text = text.replace(RT, `RT @${author}`);
+        }
+
+        const replyTo = extractParentAuthorFromText(text);
+        if (replyTo) {
+          // some magic
+          const token = ((Number(tweetId) / 1e15) * Math.PI)
+            .toString(Math.pow(6, 2))
+            .replace(/(0+|\.)/g, "");
+
+          const tweetResponse = await axios.get(
+            `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&lang=en&token=${token}`
+          );
+          await new Promise((ok) => setTimeout(ok, 1000));
+
+          const src = tweetResponse.data;
+          // console.log("src", src);
+          if (replyTo === src.in_reply_to_screen_name) {
+            const url = formatTweetUrl(replyTo, src.in_reply_to_status_id_str);
+            text = text.replace(`R to @${replyTo}:`, `RE ${url}:`);
+          }          
         }
 
         const tweet = {
           id_str: tweetId,
+          url: formatTweetUrl(username, tweetId),
           text: text,
           created_at: parseDate(item.pubDate[0]),
           entities: {
@@ -72,7 +102,7 @@ async function getTweets(username, nitterUrl = 'https://nitter.moomoo.me') {
     }
     return tweets;
   } catch (error) {
-    console.error('Error getting tweets for ', username, error);
+    console.error("Error getting tweets for ", username, error);
     return [];
   }
 }

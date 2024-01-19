@@ -39,12 +39,11 @@ async function processUserMentions(tweet, mentionedPubkeys) {
 }
 
 async function createEvent(tweet, myScreenName, mentionedPubkeys) {
-  const url = `https://twitter.com/${myScreenName}/status/${tweet.id_str}`;
   let content = tweet.text;
 
-  for (const hashtag of tweet.entities.hashtags) {
-    content += ` #${hashtag.text}`;
-  }
+  // for (const hashtag of tweet.entities.hashtags) {
+  //   content += ` #${hashtag.text}`;
+  // }
 
   const mentions = await processUserMentions(tweet, mentionedPubkeys);
   mentions.forEach((mention) => {
@@ -70,7 +69,7 @@ async function createEvent(tweet, myScreenName, mentionedPubkeys) {
   return {
     content,
     tags: [
-      ['proxy', url, 'web'],
+      ['proxy', tweet.url, 'web'],
       ['i', `twitter:${tweet.id_str}`],
     ],
   };
@@ -93,8 +92,10 @@ async function publishTweetAsNostrEvent(
     kind: 1,
   });
 
+  console.log('tweet', tweet);
+
   await ndkEvent.sign(signer);
-  console.log('tweet', tweet, 'event', ndkEvent.rawEvent());
+  console.log('event', ndkEvent.rawEvent());
 
   // FIXME publish when we're done formatting the tweets
   // const result = await ndkEvent.publish();
