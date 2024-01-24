@@ -1,27 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const axios = require('axios');
 const { getTweets } = require('./twitterService');
 const {
   start: startNostr,
   publishTweetAsNostrEvent,
 } = require('./nostrService');
 
-const { fetchMentionedPubkey } = require('./common');
-
-async function fetchMentionedPubkeysForTweet(tweet) {
-  let mentionedPubkeys = {};
-  const userMentions = tweet.entities.user_mentions;
-
-  for (const user of userMentions) {
-    const pubkey = await fetchMentionedPubkey(user.screen_name);
-    if (pubkey) {
-      mentionedPubkeys[user.screen_name] = pubkey;
-    }
-  }
-
-  return mentionedPubkeys;
-}
+const { prisma } = require('./db');
 
 async function process() {
   const users = await prisma.username.findMany();
@@ -29,13 +12,15 @@ async function process() {
     console.log('loading tweets for ', user.username);
     const tweets = await getTweets(user.username);
     console.log('got tweets for ', user.username, tweets.length);
-    await startNostr(user.relays);
+
+    // do not start connections if no tweets
+    if (!tweets.length) continue;
+
+    await startNostr(user);
+
     for (const tweet of tweets) {
-      const mentionedPubkeys = await fetchMentionedPubkeysForTweet(tweet);
       const eventResult = await publishTweetAsNostrEvent(
         tweet,
-        user.secretKey,
-        mentionedPubkeys,
         user.username
       );
 

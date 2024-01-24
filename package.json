@@ -1,13 +1,13 @@
 {
   "name": "nostr-tweet-bot",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@nostr-dev-kit/ndk": "^2.3.2",
     "@prisma/client": "^5.7.1",
@@ -17,7 +17,7 @@
     "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "nostr-tools": "^1.17.0",
+    "websocket-polyfill": "^0.0.3",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
