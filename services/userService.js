@@ -7,13 +7,23 @@ async function addUsername(username, relays) {
     where: { username },
   });
 
+  let relaysString;
+  if (Array.isArray(relays)) {
+    relaysString = relays.join(',');
+  } else {
+    relaysString = relays || '';
+  }
+
   if (user) {
+    const existingRelays = user.relays ? user.relays.split(',') : [];
+    const updatedRelays = [...new Set([...existingRelays, ...relays])].join(
+      ','
+    );
+
     user = await prisma.username.update({
       where: { username },
       data: {
-        relays: {
-          set: [...user.relays.split(','), ...relays.split(',')].join(','),
-        },
+        relays: updatedRelays,
       },
       select: {
         username: true,
@@ -24,8 +34,8 @@ async function addUsername(username, relays) {
     user = await prisma.username.create({
       data: {
         username,
-        relays: relays.join(','),
-        secretKey: generatePrivateKey()
+        relays: relaysString,
+        secretKey: generatePrivateKey(),
       },
       select: {
         username: true,
