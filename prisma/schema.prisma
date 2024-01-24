@@ -12,6 +12,7 @@ model Username {
   id         Int      @id @default(autoincrement())
   username   String   @unique
   relays     String
+  bunkerUrl  String
   secretKey  String
 }
 

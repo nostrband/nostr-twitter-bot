@@ -17,5 +17,5 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-// Запуск процесса импорта твитов
+// background processing
 processTweets();

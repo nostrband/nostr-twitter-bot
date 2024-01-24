@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 const { generatePrivateKey } = require('nostr-tools');
+const { prisma } = require('./db');
 
-async function addUsername(username, relays) {
+async function addUsername(username, relays, bunkerUrl) {
   let user = await prisma.username.findUnique({
     where: { username },
   });
@@ -12,12 +11,14 @@ async function addUsername(username, relays) {
       where: { username },
       data: {
         relays: {
-          set: [...user.relays.split(','), ...relays.split(',')].join(','),
+          set: [...user.relays.split(','), ...relays].join(','),
         },
+        bunkerUrl,
       },
       select: {
         username: true,
         relays: true,
+        bunkerUrl: true,
       },
     });
   } else {
@@ -25,11 +26,13 @@ async function addUsername(username, relays) {
       data: {
         username,
         relays: relays.join(','),
+        bunkerUrl,
         secretKey: generatePrivateKey()
       },
       select: {
         username: true,
         relays: true,
+        bunkerUrl: true,
       },
     });
   }
@@ -42,11 +45,19 @@ async function listUsernames() {
     select: {
       username: true,
       relays: true,
+      bunkerUrl: true,
     },
+  });
+}
+
+async function getUserSecret(username) {
+  return await prisma.username.findUnique({
+    where: { username },
   });
 }
 
 module.exports = {
   addUsername,
   listUsernames,
+  getUserSecret
 };

@@ -1,40 +1,56 @@
 const axios = require("axios");
 const xml2js = require("xml2js");
-const { PrismaClient } = require("@prisma/client");
+const { prisma } = require("./db");
 
-const prisma = new PrismaClient();
-
-function parseDate(dateString) {
-  return new Date(dateString).getTime();
-}
+// function parseDate(dateString) {
+//   return new Date(dateString).getTime();
+// }
 
 function extractIdFromGuid(guid) {
   const match = guid.match(/status\/(\d+)/);
   return match ? match[1] : null;
 }
 
-function extractAuthorFromGuid(guid) {
-  const match = guid.match(/\/(\w+)\/status/);
-  return match ? match[1] : null;
-}
+// function extractAuthorFromGuid(guid) {
+//   const match = guid.match(/\/(\w+)\/status/);
+//   return match ? match[1] : null;
+// }
 
-function extractParentAuthorFromText(text) {
-  const match = text.match(/R to @(\w+):/);
-  return match ? match[1] : null;
-}
+// function extractParentAuthorFromText(text) {
+//   const match = text.match(/R to @(\w+):/);
+//   return match ? match[1] : null;
+// }
 
-function extractHashtags(text) {
-  const regex = /#\w+/g;
-  return text.match(regex) || [];
-}
+// function extractHashtags(text) {
+//   const regex = /#\w+/g;
+//   return text.match(regex) || [];
+// }
 
-function extractUserMentions(text) {
-  const regex = /@\w+/g;
-  return text.match(regex) || [];
-}
+// function extractUserMentions(text) {
+//   const regex = /@\w+/g;
+//   return text.match(regex) || [];
+// }
 
 function formatTweetUrl(username, id) {
   return `https://twitter.com/${username}/status/${id}`;
+}
+
+function formatProfileUrl(username) {
+  return `https://twitter.com/${username}`;
+}
+
+async function getTweet(tweetId) {
+  // some magic
+  const token = ((Number(tweetId) / 1e15) * Math.PI)
+    .toString(Math.pow(6, 2))
+    .replace(/(0+|\.)/g, "");
+
+  const tweetResponse = await axios.get(
+    `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&lang=en&token=${token}`
+  );
+  await new Promise((ok) => setTimeout(ok, 1000));
+
+  return tweetResponse.data;
 }
 
 async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
@@ -49,55 +65,23 @@ async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
 
     for (const item of items) {
       const tweetId = extractIdFromGuid(item.guid[0]);
-      const author = extractAuthorFromGuid(item.guid[0]);
       const isAlreadyImported = await prisma.history.findFirst({
         where: {
           tweetId: tweetId,
         },
       });
       if (!isAlreadyImported) {
-        let text = item.title[0];
-
-        const RT = `RT by @${username}`;
-        if (author != username && text.startsWith(RT)) {
-          text = text.replace(RT, `RT @${author}`);
+        try {
+          const tweet = await getTweet(tweetId);
+          if (tweet) {
+            console.log("got tweet", tweetId, "by", username);
+            tweets.push(tweet);
+          }
+          // FIXME DEBUG remove later
+          if (tweets.length >= 5) break;
+        } catch (e) {
+          console.log("Failed to fetch tweet", tweetId, "by", username, e);
         }
-
-        const replyTo = extractParentAuthorFromText(text);
-        if (replyTo) {
-          // some magic
-          const token = ((Number(tweetId) / 1e15) * Math.PI)
-            .toString(Math.pow(6, 2))
-            .replace(/(0+|\.)/g, "");
-
-          const tweetResponse = await axios.get(
-            `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&lang=en&token=${token}`
-          );
-          await new Promise((ok) => setTimeout(ok, 1000));
-
-          const src = tweetResponse.data;
-          // console.log("src", src);
-          if (replyTo === src.in_reply_to_screen_name) {
-            const url = formatTweetUrl(replyTo, src.in_reply_to_status_id_str);
-            text = text.replace(`R to @${replyTo}:`, `RE ${url}:`);
-          }          
-        }
-
-        const tweet = {
-          id_str: tweetId,
-          url: formatTweetUrl(username, tweetId),
-          text: text,
-          created_at: parseDate(item.pubDate[0]),
-          entities: {
-            hashtags: extractHashtags(text).map((tag) => ({
-              text: tag.substring(1),
-            })),
-            user_mentions: extractUserMentions(text).map((mention) => ({
-              screen_name: mention.substring(1),
-            })),
-          },
-        };
-        tweets.push(tweet);
       }
     }
     return tweets;
@@ -109,4 +93,6 @@ async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
 
 module.exports = {
   getTweets,
+  formatTweetUrl,
+  formatProfileUrl,
 };
