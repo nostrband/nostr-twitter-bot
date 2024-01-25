@@ -28,7 +28,7 @@ let bunkerNdk = null;
 let signer = null;
 
 function releaseNdk(ndk) {
-  if (!ndk) return
+  if (!ndk) return;
   for (const r of ndk.pool.relays.values()) r.disconnect();
 }
 
@@ -46,7 +46,7 @@ async function start(user) {
     explicitRelayUrls: user.relays,
   });
 
-  return true;  
+  return true;
 }
 
 function convertToTimestamp(dateString) {
@@ -75,7 +75,6 @@ async function fetchTweetEvent(screenName, id) {
 }
 
 async function createEvent(tweet, username) {
-
   // retweet?
   const isRetweet = tweet.user.screen_name.toLowerCase() !== username;
 
@@ -118,8 +117,12 @@ async function createEvent(tweet, username) {
       // no parent tweet on nostr
 
       // add a marker so that when parent is published
-      // we could rebuild the thread 
-      event.tags.push(["x", `twitter:${tweet.in_reply_to_status_id_str}`, "reply"]);
+      // we could rebuild the thread
+      event.tags.push([
+        "x",
+        `twitter:${tweet.in_reply_to_status_id_str}`,
+        "reply",
+      ]);
 
       // format 'RE url: text' content to make it backward compatible
       // in all nostr clients
@@ -133,9 +136,10 @@ async function createEvent(tweet, username) {
       );
 
       // if parent author is on nostr, tag them
-      const parentPubkey = await fetchMentionedPubkey(tweet.in_reply_to_screen_name);
-      if (parentPubkey)
-        event.tags.push(['p', parentPubkey]);
+      const parentPubkey = await fetchMentionedPubkey(
+        tweet.in_reply_to_screen_name
+      );
+      if (parentPubkey) event.tags.push(["p", parentPubkey]);
     }
   }
 
@@ -172,11 +176,14 @@ async function createEvent(tweet, username) {
 
   if (tweet.extended_entities?.media) {
     for (const extEntity of tweet.extended_entities?.media) {
-      event.content = event.content.replace(extEntity.url, extEntity.media_url_https);
+      event.content = event.content.replace(
+        extEntity.url,
+        extEntity.media_url_https
+      );
     }
   }
 
-  // NOTE: hashtags are handled by ndk automatically (#tag is 
+  // NOTE: hashtags are handled by ndk automatically (#tag is
   // processed to add [t, tag])
 
   return event;
@@ -197,8 +204,8 @@ async function publishTweetAsNostrEvent(tweet, username) {
   });
 
   // generate id and convert to signable event
-  const event = await ndkEvent.toNostrEvent(); 
-  console.log("signing", event)
+  const event = await ndkEvent.toNostrEvent();
+  console.log("signing", event);
   event.sig = await signer.sign(event);
 
   console.log("signed", event);
@@ -209,13 +216,12 @@ async function publishTweetAsNostrEvent(tweet, username) {
   return result;
 }
 
-async function startSigner(user) {
-
+async function startSigner(user, firstConnect = false) {
   const info = parseBunkerUrl(user.bunkerUrl);
   console.log({ info });
   if (!info) return undefined;
 
-  try {
+  const promise = new Promise(async (ok) => {
     const ndk = new NDK({
       explicitRelayUrls: info.relays,
     });
@@ -227,21 +233,32 @@ async function startSigner(user) {
     const signer = new NDKNip46Signer(ndk, npub, localSigner);
     await signer.blockUntilReady();
     console.log("connected to bunker", user.bunkerUrl);
-    return {
+    ok({
       signer,
-      ndk
-    };
+      ndk,
+    });
+  });
 
+  const timeout = new Promise(() => {
+    setTimeout(
+      () => {
+        console.log("Failed to connect (timeout) to", info);
+        throw new Error("Bunker timeout");
+      },
+      firstConnect ? 60000 : 3000
+    );
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
   } catch (e) {
     console.log("Failed to connect to", info, e);
+    return undefined;
   }
-
-  return undefined;
 }
 
 async function connect(user) {
-
-  const signerNdk = await startSigner(user);
+  const signerNdk = await startSigner(user, true);
   if (!signerNdk) return false;
 
   releaseNdk(signerNdk.ndk);

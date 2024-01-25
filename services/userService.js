@@ -14,10 +14,13 @@ async function addUsername(username, relays, bunkerUrl) {
   }
 
   if (user) {
-    const existingRelays = user.relays ? user.relays.split(',') : [];
-    const updatedRelays = [...new Set([...existingRelays, ...relays])].join(
-      ','
-    );
+    // const existingRelays = user.relays ? user.relays.split(',') : [];
+    // const updatedRelays = [...new Set([...existingRelays, ...relays])].join(
+    //   ','
+    // );
+
+    // just replace them
+    const updatedRelays = relaysString;
 
     user = await prisma.username.update({
       where: { username },
