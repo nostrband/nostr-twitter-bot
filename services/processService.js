@@ -9,14 +9,16 @@ const { prisma } = require('./db');
 async function process() {
   const users = await prisma.username.findMany();
   for (const user of users) {
+
+    console.log('starting for ', user.username);
+    if (!await startNostr(user)) continue;
+
     console.log('loading tweets for ', user.username);
     const tweets = await getTweets(user.username);
     console.log('got tweets for ', user.username, tweets.length);
 
     // do not start connections if no tweets
     if (!tweets.length) continue;
-
-    await startNostr(user);
 
     for (const tweet of tweets) {
       const eventResult = await publishTweetAsNostrEvent(

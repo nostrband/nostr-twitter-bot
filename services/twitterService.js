@@ -77,8 +77,8 @@ async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
             console.log("got tweet", tweetId, "by", username);
             tweets.push(tweet);
           }
-          // FIXME DEBUG remove later
-          if (tweets.length >= 5) break;
+          // DEBUG
+          //if (tweets.length >= 5) break;
         } catch (e) {
           console.log("Failed to fetch tweet", tweetId, "by", username, e);
         }
