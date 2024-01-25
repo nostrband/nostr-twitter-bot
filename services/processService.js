@@ -41,7 +41,7 @@ async function process() {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  setTimeout(process, 0);
+  setTimeout(process, 1000);
 }
 
 module.exports = {

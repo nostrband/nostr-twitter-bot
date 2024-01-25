@@ -221,29 +221,34 @@ async function startSigner(user, firstConnect = false) {
   console.log({ info });
   if (!info) return undefined;
 
-  const promise = new Promise(async (ok) => {
-    const ndk = new NDK({
-      explicitRelayUrls: info.relays,
-    });
-    await ndk.connect();
-    console.log("connected to bunker relay", user.bunkerUrl);
+  const promise = new Promise(async (ok, err) => {
+    try {
+      const ndk = new NDK({
+        explicitRelayUrls: info.relays,
+      });
+      await ndk.connect();
+      console.log("connected to bunker relay", user.bunkerUrl);
 
-    const npub = nip19.npubEncode(info.pubkey);
-    const localSigner = new NDKPrivateKeySigner(user.secretKey);
-    const signer = new NDKNip46Signer(ndk, npub, localSigner);
-    await signer.blockUntilReady();
-    console.log("connected to bunker", user.bunkerUrl);
-    ok({
-      signer,
-      ndk,
-    });
+      const npub = nip19.npubEncode(info.pubkey);
+      const localSigner = new NDKPrivateKeySigner(user.secretKey);
+      const signer = new NDKNip46Signer(ndk, npub, localSigner);
+      await signer.blockUntilReady();
+      console.log("connected to bunker", user.bunkerUrl);
+      ok({
+        signer,
+        ndk,
+      });
+    } catch (e) {
+      console.log("Failed to connect to", info, e);
+      err(e)
+    }
   });
 
-  const timeout = new Promise(() => {
+  const timeout = new Promise((_, err) => {
     setTimeout(
       () => {
         console.log("Failed to connect (timeout) to", info);
-        throw new Error("Bunker timeout");
+        err(new Error("Bunker timeout"))
       },
       firstConnect ? 60000 : 3000
     );
@@ -252,7 +257,6 @@ async function startSigner(user, firstConnect = false) {
   try {
     return await Promise.race([promise, timeout]);
   } catch (e) {
-    console.log("Failed to connect to", info, e);
     return undefined;
   }
 }
