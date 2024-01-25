@@ -7,6 +7,7 @@ const {
   NDKEvent,
   NDKPrivateKeySigner,
   NDKNip46Signer,
+  NDKRelaySet,
 } = require("@nostr-dev-kit/ndk");
 const { getPublicKey, nip19 } = require("nostr-tools");
 const { parseBunkerUrl, fetchMentionedPubkey } = require("./common");
@@ -19,6 +20,7 @@ const RELAYS = [OUTBOX_RELAY, EXIT_RELAY];
 const fetchNdk = new NDK({
   explicitRelayUrls: RELAYS,
 });
+fetchNdk.connect();
 
 // used for publishing to user's relays
 let userNdk = null;
@@ -42,9 +44,11 @@ async function start(user) {
   bunkerNdk = signerNdk.ndk;
   signer = signerNdk.signer;
 
+  console.log("user", user.username, "relays", user.relays);
   userNdk = new NDK({
-    explicitRelayUrls: user.relays,
+    explicitRelayUrls: user.relays.split(","),
   });
+  await userNdk.connect();
 
   return true;
 }
@@ -67,7 +71,7 @@ async function fetchTweetEvent(screenName, id) {
     {},
     NDKRelaySet.fromRelayUrls(RELAYS, fetchNdk)
   );
-  return events.find((e) =>
+  return [...events.values()].find((e) =>
     e.tags.find(
       (t) => t.length >= 3 && t[0] === "x" && t[1] === tid && t[2] === "self"
     )
@@ -150,7 +154,6 @@ async function createEvent(tweet, username) {
   //   const url = formatTweetUrl(tweet.user.screen_name, tweet.id_str);
   //   text = `RT ${url}: ${text}`
   // }
-
   // user mentions
   for (const user of tweet.entities.user_mentions) {
     if (user.id_str === "-1") continue;
@@ -189,8 +192,9 @@ async function createEvent(tweet, username) {
   return event;
 }
 
-async function publishTweetAsNostrEvent(tweet, username) {
-  const eventPayload = await createEvent(tweet, username);
+async function publishTweetAsNostrEvent(tweet, user) {
+
+  const eventPayload = await createEvent(tweet, user.username);
 
   // bad event
   if (!eventPayload) return undefined;
@@ -206,14 +210,37 @@ async function publishTweetAsNostrEvent(tweet, username) {
   // generate id and convert to signable event
   const event = await ndkEvent.toNostrEvent();
   console.log("signing", event);
-  event.sig = await signer.sign(event);
 
+  event.sig = await signer.sign(event);
   console.log("signed", event);
 
-  // FIXME publish when we're done formatting the tweets
-  // const result = await ndkEvent.publish();
-  const result = null; // { id: ndkEvent.id };
-  return result;
+  await new NDKEvent(userNdk, event).publish(
+    //NDKRelaySet.fromRelayUrls(user.relays.split(",")),
+    undefined,
+    3000
+  );
+  console.log("published", ndkEvent.id);
+
+  return ndkEvent.rawEvent();
+}
+
+async function wait(fn, time) {
+  let timer;
+  const promise = new Promise(async (ok, err) => {
+    try {
+      const r = await fn();
+      clearTimeout(timer);
+      ok(r);
+    } catch (e) {
+      err(e);
+    }
+  });
+
+  const timeout = new Promise((_, err) => {
+    timer = setTimeout(() => err(new Error("Timeout")), time);
+  });
+
+  return await Promise.race([promise, timeout]);
 }
 
 async function startSigner(user, firstConnect = false) {
@@ -221,52 +248,63 @@ async function startSigner(user, firstConnect = false) {
   console.log({ info });
   if (!info) return undefined;
 
-  const promise = new Promise(async (ok, err) => {
-    try {
-      const ndk = new NDK({
-        explicitRelayUrls: info.relays,
-      });
-      await ndk.connect();
-      console.log("connected to bunker relay", user.bunkerUrl);
+  try {
+    return await wait(
+      async () => {
+        const ndk = new NDK({
+          explicitRelayUrls: info.relays,
+        });
+        await ndk.connect();
+        console.log("connected to bunker relay", user.bunkerUrl);
 
-      const npub = nip19.npubEncode(info.pubkey);
-      const localSigner = new NDKPrivateKeySigner(user.secretKey);
-      const signer = new NDKNip46Signer(ndk, npub, localSigner);
-      await signer.blockUntilReady();
-      console.log("connected to bunker", user.bunkerUrl);
-      ok({
-        signer,
-        ndk,
-      });
-    } catch (e) {
-      console.log("Failed to connect to", info, e);
-      err(e)
-    }
-  });
+        const npub = nip19.npubEncode(info.pubkey);
+        const localSigner = new NDKPrivateKeySigner(user.secretKey);
+        const signer = new NDKNip46Signer(ndk, npub, localSigner);
+        await signer.blockUntilReady();
+        console.log("connected to bunker", user.bunkerUrl);
 
-  const timeout = new Promise((_, err) => {
-    setTimeout(
-      () => {
-        console.log("Failed to connect (timeout) to", info);
-        err(new Error("Bunker timeout"))
+        return {
+          signer,
+          ndk,
+        };
       },
       firstConnect ? 60000 : 3000
     );
-  });
-
-  try {
-    return await Promise.race([promise, timeout]);
   } catch (e) {
+    console.log("Failed to connect to", info, e);
     return undefined;
   }
 }
 
 async function connect(user) {
+  console.log("Test connect");
   const signerNdk = await startSigner(user, true);
   if (!signerNdk) return false;
 
+  let ok = false;
+  try {
+    await wait(async () => {
+      const event = new NDKEvent(signerNdk.ndk, {
+        kind: 1,
+        content: "Test event to setup signing.",
+      });
+      event.pubkey = (await signerNdk.signer.user()).hexpubkey;
+      console.log("testing signing", event.rawEvent());
+      event.sig = await signerNdk.signer.sign(await event.toNostrEvent());
+      console.log("signed test event", event.rawEvent());
+    }, 60000);
+
+    ok = true;
+  } catch (e) {
+    console.log("Failed to sign test event", e);
+  }
+
   releaseNdk(signerNdk.ndk);
 
+  // signing is just to make sure user
+  // gives all perms at once, but really all
+  // we need is connect, so
+  // return ok;
   return true;
 }
 

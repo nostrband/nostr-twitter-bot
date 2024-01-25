@@ -65,6 +65,10 @@ async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
 
     for (const item of items) {
       const tweetId = extractIdFromGuid(item.guid[0]);
+      if (item.title[0].startsWith("RT by @")) {
+        console.log("Skip RT", tweetId);
+        continue;
+      }
       const isAlreadyImported = await prisma.history.findFirst({
         where: {
           tweetId: tweetId,
