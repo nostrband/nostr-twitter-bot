@@ -1,5 +1,3 @@
-const axios = require("axios");
-
 function parseBunkerUrl(bunkerUrl) {
   try {
     const url = new URL(bunkerUrl);

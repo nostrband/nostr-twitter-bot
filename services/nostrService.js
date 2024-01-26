@@ -16,6 +16,7 @@ const {
   formatTweetUrl,
   getTweet,
 } = require("./twitterService");
+const { default: axios } = require("axios");
 const OUTBOX_RELAY = "wss://relay.nostr.band";
 const EXIT_RELAY = "wss://relay.exit.pub";
 const BROADCAST_RELAY = "wss://nostr.mutinywallet.com";
@@ -92,6 +93,8 @@ function isValidVerifyTweet(tweet, username, pubkey) {
 }
 
 async function fetchTwitterPubkey(screenName) {
+  screenName = screenName.toLowerCase();
+
   if (screenName in mentionedPubkeysCache) {
     return mentionedPubkeysCache[screenName];
   }
@@ -101,7 +104,8 @@ async function fetchTwitterPubkey(screenName) {
       `https://api.nostr.band/v0/twitter_pubkey/${screenName}`
     );
     const body = response.data;
-    if (body.twitter_handle === screenName && body.pubkey) {
+    console.log({ body });
+    if (body.twitter_handle.toLowerCase() === screenName && body.pubkey) {
       mentionedPubkeysCache[screenName] = body.pubkey;
       return body.pubkey;
     }
@@ -109,6 +113,10 @@ async function fetchTwitterPubkey(screenName) {
     if (error.response && error.response.status !== 404) {
       console.error("Error fetching mentioned profile", screenName, error);
       return undefined;
+    }
+    if (!error.response) {
+      console.error("Error fetching mentioned profile", screenName, error);
+      throw new Error("Failed to fetch using axios");
     }
   }
   console.log("Not found nostr account via API for", screenName);
@@ -156,6 +164,14 @@ async function fetchTwitterPubkey(screenName) {
 async function fetchTweetEvent(screenName, id) {
   const pubkey = await fetchTwitterPubkey(screenName);
   if (!pubkey) return;
+
+  console.log("Fetching note for", screenName, pubkey, id);
+  const relays = TWITTER_RELAYS;
+  if (userNdk) relays.splice(0, 0,
+    ...[...userNdk.pool.relays.values()].map(r => r.url)
+  )
+  console.log({ relays });
+
   const tid = `twitter:${id}`;
   const events = await fetchNdk.fetchEvents(
     {
@@ -164,7 +180,7 @@ async function fetchTweetEvent(screenName, id) {
       "#x": [tid],
     },
     {},
-    NDKRelaySet.fromRelayUrls(TWITTER_RELAYS, fetchNdk)
+    NDKRelaySet.fromRelayUrls(relays, fetchNdk)
   );
   return [...events.values()].find((e) =>
     e.tags.find(
@@ -239,6 +255,42 @@ async function createEvent(tweet, username) {
         tweet.in_reply_to_screen_name
       );
       if (parentPubkey) event.tags.push(["p", parentPubkey]);
+    }
+  }
+
+  const isQuote = !!tweet.quoted_tweet;
+  if (isQuote) {
+    // fetch parent tweet on nostr
+    const quote = await fetchTweetEvent(
+      tweet.quoted_tweet.user.screen_name,
+      tweet.quoted_tweet.id_str
+    );
+
+    if (quote) {
+      event.content += `\nnostr:${nip19.neventEncode({
+        id: quote.id,
+        relays: [quote.relay.url]
+      })}`;
+      event.tags.push(["e", quote.id, OUTBOX_RELAY, "mention"]);
+    } else {
+      // no quote tweet on nostr
+
+      // add a marker so that when quote is published
+      // we could rebuild the thread
+      event.tags.push(["x", `twitter:${tweet.quoted_tweet.id_str}`, "mention"]);
+
+      // append '\nQuote: url'
+      const url = formatTweetUrl(
+        tweet.quoted_tweet.user.screen_name,
+        tweet.quoted_tweet.id_str
+      );
+      event.content += `\nQuote: ${url}`;
+
+      // if parent author is on nostr, tag them
+      const quotePubkey = await fetchTwitterPubkey(
+        tweet.quoted_tweet.user.screen_name
+      );
+      if (quotePubkey) event.tags.push(["p", quotePubkey]);
     }
   }
 
@@ -400,7 +452,7 @@ async function connect(user, verifyTweetId) {
               (t) =>
                 t.length < 2 || t[0] !== "i" || !t[1].startsWith("twitter:")
             ),
-            ["i", `twitter:${user.username}`, verifyTweetId],
+            ["i", `twitter:${user.username.toLowerCase()}`, verifyTweetId],
           ],
         });
       } else {
