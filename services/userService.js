@@ -1,26 +1,43 @@
 const { prisma } = require("./db");
 
-async function addUsername({ username, relays, bunkerUrl, secretKey }) {
-
-  let relaysString;
+function formatRelays(relays) {
   if (Array.isArray(relays)) {
-    relaysString = relays.join(",");
+    return relays.join(",");
   } else {
-    relaysString = relays || "";
+    return relays || "";
   }
+}
+
+async function upsertUsername({ username, relays, bunkerUrl, secretKey }) {
 
   return await prisma.username.upsert({
     where: { username },
     create: {
       username,
-      relays: relaysString,
+      relays: formatRelays(relays),
       secretKey,
       bunkerUrl,
     },
     update: {
-      relays: relaysString,
+      relays: formatRelays(relays),
       secretKey,
       bunkerUrl,
+    },
+    select: {
+      username: true,
+      relays: true,
+      bunkerUrl: true,
+    },
+  });
+}
+
+async function updateUsername({ username, relays }) {
+
+  return await prisma.username.update({
+    where: { username },
+    data: {
+      relays: formatRelays(relays),
+      nextScan: new Date(),
     },
     select: {
       username: true,
@@ -50,7 +67,8 @@ async function setNextScan(username, sec) {
 }
 
 module.exports = {
-  addUsername,
+  addUsername: upsertUsername,
+  updateUsername,
   listUsernames,
   setNextScan,
 };

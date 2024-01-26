@@ -2,6 +2,19 @@ const axios = require("axios");
 const xml2js = require("xml2js");
 const { prisma } = require("./db");
 
+// FIXME maybe use https://status.d420.de/ api?
+const NITTERS = [
+  "https://nitter.moomoo.me",
+  "https://nitter.catsarch.com",
+  "https://nitter.freedit.eu",
+  "https://nitter.esmailelbob.xyz",
+  "https://nitter.uni-sonia.com",
+  "https://nitter.kylrth.com",
+  "https://nitter.jakefrosty.com",
+  "https://nitter.adminforge.de",
+  "https://nitter.poast.org",
+];
+
 // function parseDate(dateString) {
 //   return new Date(dateString).getTime();
 // }
@@ -53,7 +66,10 @@ async function getTweet(tweetId) {
   return tweetResponse.data;
 }
 
-async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
+async function getTweets(username) {
+  const nitterUrl = NITTERS[Math.floor(Math.random() * NITTERS.length)];
+  console.log("Using", nitterUrl, "for", username);
+
   try {
     const response = await axios.get(
       `${nitterUrl}/${username}/with_replies/rss`
@@ -74,18 +90,22 @@ async function getTweets(username, nitterUrl = "https://nitter.moomoo.me") {
           tweetId: tweetId,
         },
       });
-      if (!isAlreadyImported) {
-        try {
-          const tweet = await getTweet(tweetId);
-          if (tweet) {
-            console.log("got tweet", tweetId, "by", username);
-            tweets.push(tweet);
-          }
-          // DEBUG
-          //if (tweets.length >= 5) break;
-        } catch (e) {
-          console.log("Failed to fetch tweet", tweetId, "by", username, e);
+
+      if (isAlreadyImported) {
+        console.log("Skip imported", tweetId);
+        continue;
+      }
+
+      try {
+        const tweet = await getTweet(tweetId);
+        if (tweet) {
+          console.log("got tweet", tweetId, "by", username);
+          tweets.push(tweet);
         }
+        // DEBUG
+        //if (tweets.length >= 5) break;
+      } catch (e) {
+        console.log("Failed to fetch tweet", tweetId, "by", username, e);
       }
     }
     return tweets;

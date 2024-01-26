@@ -1,5 +1,5 @@
 const express = require("express");
-const { addUsername, getUserSecret } = require("../services/userService");
+const { addUsername, getUserSecret, updateUsername } = require("../services/userService");
 const { connect } = require("../services/nostrService");
 const { parseBunkerUrl, fetchMentionedPubkey } = require("../services/common");
 const { generatePrivateKey } = require("nostr-tools");
@@ -18,33 +18,42 @@ router.post("/", async (req, res) => {
     //   return res.status(403).send('Forbidden');
     // }
 
-    const info = parseBunkerUrl(bunkerUrl);
-    console.log({ info });
-    if (!info) {
-      res.status(400).send("Bad bunker url");
-      return;
+    let result;
+    if (bunkerUrl) {
+      const info = parseBunkerUrl(bunkerUrl);
+      console.log({ info });
+      if (!info) {
+        res.status(400).send("Bad bunker url");
+        return;
+      }
+  
+      const pubkey = await fetchMentionedPubkey(username);
+      console.log({ pubkey });
+      if (!pubkey || pubkey !== info.pubkey) {
+        res.status(403).send("Bad pubkey");
+        return;
+      }
+  
+      // connect
+      const secretKey = generatePrivateKey();
+      const user = {
+        username, relays, bunkerUrl, secretKey
+      };
+      if (!await connect(user)) {
+        res.status(405).send("Failed to connect to keys");
+        return;
+      }  
+
+      // insert
+      result = await addUsername(user);
+    } else {
+      // update
+      result = await updateUsername({
+        username, relays
+      });
     }
 
-    const pubkey = await fetchMentionedPubkey(username);
-    console.log({ pubkey });
-    if (!pubkey || pubkey !== info.pubkey) {
-      res.status(403).send("Bad pubkey");
-      return;
-    }
-
-    // connect
-    const secretKey = generatePrivateKey();
-    const user = {
-      username, relays, bunkerUrl, secretKey
-    };
-    if (!await connect(user)) {
-      res.status(405).send("Failed to connect to keys");
-      return;
-    }
-
-    // insert
-    const newUser = await addUsername(user);
-    res.status(200).json(newUser);
+    res.status(200).json(result);
   } catch (error) {
     console.error(error);
     res.status(500).send("Server error");
