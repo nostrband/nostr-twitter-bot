@@ -117,6 +117,7 @@ async function getTweets(username) {
 
 module.exports = {
   getTweets,
+  getTweet,
   formatTweetUrl,
   formatProfileUrl,
 };

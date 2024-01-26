@@ -9,27 +9,32 @@ const {
   NDKNip46Signer,
   NDKRelaySet,
 } = require("@nostr-dev-kit/ndk");
-const { getPublicKey, nip19 } = require("nostr-tools");
-const { parseBunkerUrl, fetchMentionedPubkey } = require("./common");
-const { formatProfileUrl, formatTweetUrl } = require("./twitterService");
+const { nip19 } = require("nostr-tools");
+const { parseBunkerUrl } = require("./common");
+const {
+  formatProfileUrl,
+  formatTweetUrl,
+  getTweet,
+} = require("./twitterService");
 const OUTBOX_RELAY = "wss://relay.nostr.band";
 const EXIT_RELAY = "wss://relay.exit.pub";
-const RELAYS = [OUTBOX_RELAY, EXIT_RELAY];
+const BROADCAST_RELAY = "wss://nostr.mutinywallet.com";
+const TWITTER_RELAYS = [OUTBOX_RELAY, EXIT_RELAY];
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
-  "wss://nostr.mutinywallet.com",
   "wss://nostr.mom",
   "wss://relay.snort.social",
   "wss://nostr.wine",
   "wss://eden.nostr.land",
   "wss://relay.exit.pub",
   "wss://relay.nostr.band",
+  BROADCAST_RELAY,
 ];
 
 // used to query the wider network
 const fetchNdk = new NDK({
-  explicitRelayUrls: RELAYS,
+  explicitRelayUrls: TWITTER_RELAYS,
 });
 fetchNdk.connect();
 
@@ -39,6 +44,9 @@ let userNdk = null;
 // used to talk to the signer
 let bunkerNdk = null;
 let signer = null;
+
+// cache of username:pubkey mapping
+const mentionedPubkeysCache = {};
 
 function releaseNdk(ndk) {
   if (!ndk) return;
@@ -69,8 +77,81 @@ function convertToTimestamp(dateString) {
   return Math.floor(dateObject.getTime() / 1000);
 }
 
+function isValidVerifyTweet(tweet, pubkey) {
+  return tweet.text.match(
+    new RegExp(
+      `Verifying my account on nostr\\s+My Public key: "${nip19.npubEncode(
+        pubkey
+      )}"`,
+      "i"
+    )
+  );
+}
+
+async function fetchTwitterPubkey(screenName) {
+  if (screenName in mentionedPubkeysCache) {
+    return mentionedPubkeysCache[screenName];
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.nostr.band/v0/twitter_pubkey/${screenName}`
+    );
+    const body = response.data;
+    if (body.twitter_handle === screenName && body.pubkey) {
+      mentionedPubkeysCache[screenName] = body.pubkey;
+      return body.pubkey;
+    }
+  } catch (error) {
+    if (error.response && error.response.status !== 404) {
+      console.error("Error fetching mentioned profile", screenName, error);
+      return undefined;
+    }
+  }
+  console.log("Not found nostr account via API for", screenName);
+
+  const tid = `twitter:${screenName}`;
+  const events = await fetchNdk.fetchEvents(
+    {
+      kinds: [0],
+      "#i": [tid],
+    },
+    {},
+    NDKRelaySet.fromRelayUrls([OUTBOX_RELAY], fetchNdk)
+  );
+
+  console.log("Got verification events for", screenName, events.size);
+  for (const event of events.values()) {
+    const tweetId = event.tags.find(
+      (t) => t.length >= 3 && t[0] === "i" && t[1] === tid
+    )?.[2];
+    if (!tweetId) continue;
+
+    console.log(
+      "Checking tweet",
+      tweetId,
+      "by",
+      event.pubkey,
+      "for",
+      screenName
+    );
+    const tweet = await getTweet(tweetId);
+    if (!tweet) continue;
+
+    console.log("Got tweet ", { id: tweet.id_str, text: tweet.text });
+    if (isValidVerifyTweet(tweet, event.pubkey)) {
+      console.log("Verified", screenName, event.pubkey);
+      mentionedPubkeysCache[screenName] = event.pubkey;
+      return event.pubkey;
+    }
+  }
+
+  mentionedPubkeysCache[screenName] = null;
+  return undefined;
+}
+
 async function fetchTweetEvent(screenName, id) {
-  const pubkey = await fetchMentionedPubkey(screenName);
+  const pubkey = await fetchTwitterPubkey(screenName);
   if (!pubkey) return;
   const tid = `twitter:${id}`;
   const events = await fetchNdk.fetchEvents(
@@ -80,7 +161,7 @@ async function fetchTweetEvent(screenName, id) {
       "#x": [tid],
     },
     {},
-    NDKRelaySet.fromRelayUrls(RELAYS, fetchNdk)
+    NDKRelaySet.fromRelayUrls(TWITTER_RELAYS, fetchNdk)
   );
   return [...events.values()].find((e) =>
     e.tags.find(
@@ -151,7 +232,7 @@ async function createEvent(tweet, username) {
       );
 
       // if parent author is on nostr, tag them
-      const parentPubkey = await fetchMentionedPubkey(
+      const parentPubkey = await fetchTwitterPubkey(
         tweet.in_reply_to_screen_name
       );
       if (parentPubkey) event.tags.push(["p", parentPubkey]);
@@ -168,7 +249,7 @@ async function createEvent(tweet, username) {
   // user mentions
   for (const user of tweet.entities.user_mentions) {
     if (user.id_str === "-1") continue;
-    const pubkey = await fetchMentionedPubkey(user.screen_name);
+    const pubkey = await fetchTwitterPubkey(user.screen_name);
     if (pubkey) {
       const link = `nostr:${nip19.nprofileEncode({
         pubkey,
@@ -286,7 +367,7 @@ async function startSigner(user, firstConnect = false) {
   }
 }
 
-async function connect(user) {
+async function connect(user, verifyTweetId) {
   console.log("Test connect");
   const signerNdk = await startSigner(user, true);
   if (!signerNdk) return false;
@@ -294,14 +375,47 @@ async function connect(user) {
   let ok = false;
   try {
     await wait(async () => {
-      const event = new NDKEvent(signerNdk.ndk, {
-        kind: 1,
-        content: "Test event to setup signing.",
-      });
-      event.pubkey = (await signerNdk.signer.user()).hexpubkey;
+      const pubkey = (await signerNdk.signer.user()).hexpubkey;
+
+      let event;
+      if (verifyTweetId) {
+        const profile = await fetchNdk.fetchEvent({
+          kinds: [0],
+          authors: [pubkey],
+        });
+        if (!profile || profile.kind !== 0 || profile.pubkey !== pubkey) {
+          console.log("Failed to fetch profile for", pubkey);
+          return;
+        }
+
+        event = new NDKEvent(fetchNdk, {
+          kind: profile.kind,
+          pubkey,
+          content: profile.content,
+          tags: [
+            ...profile.tags,
+            ["i", `twitter:${user.username}`, verifyTweetId],
+          ],
+        });
+      } else {
+        event = new NDKEvent(signerNdk.ndk, {
+          kind: 1,
+          content: "Test event to setup signing.",
+        });
+      }
+
+      event.pubkey = pubkey;
       console.log("testing signing", event.rawEvent());
       event.sig = await signerNdk.signer.sign(await event.toNostrEvent());
       console.log("signed test event", event.rawEvent());
+
+      if (verifyTweetId) {
+        await event.publish(
+          NDKRelaySet.fromRelayUrls([OUTBOX_RELAY, BROADCAST_RELAY], event.ndk),
+          10000
+        );
+        console.log("published verification update", user.username, pubkey);
+      }
     }, 60000);
 
     ok = true;
@@ -322,4 +436,6 @@ module.exports = {
   start,
   connect,
   publishTweetAsNostrEvent,
+  fetchTwitterPubkey,
+  isValidVerifyTweet,
 };

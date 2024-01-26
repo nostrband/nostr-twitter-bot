@@ -1,16 +1,17 @@
 const express = require("express");
-const { addUsername, getUserSecret, updateUsername, getUser } = require("../services/userService");
-const { connect } = require("../services/nostrService");
-const { parseBunkerUrl, fetchMentionedPubkey } = require("../services/common");
+const { updateUsername, getUser, upsertUsername } = require("../services/userService");
+const { connect, fetchTwitterPubkey, isValidVerifyTweet } = require("../services/nostrService");
+const { parseBunkerUrl } = require("../services/common");
 const { generatePrivateKey } = require("nostr-tools");
+const { getTweet } = require("../services/twitterService");
 const router = express.Router();
 
 router.post("/", async (req, res) => {
-  let { username, relays, bunkerUrl } = req.body;
+  let { username, relays, bunkerUrl, verifyTweetId } = req.body;
 
   // normalize
   username = username.toLowerCase();
-  console.log({ username, relays, bunkerUrl });
+  console.log({ username, relays, bunkerUrl, verifyTweetId });
   try {
     // const isAuthValid = await verifyNostrAuth(req, '/add');
     // console.log('Is Authorization Valid?', isAuthValid);
@@ -27,11 +28,25 @@ router.post("/", async (req, res) => {
         return;
       }
   
-      const pubkey = await fetchMentionedPubkey(username);
+      const pubkey = await fetchTwitterPubkey(username);
       console.log({ pubkey });
       if (!pubkey || pubkey !== info.pubkey) {
-        res.status(403).send("Bad pubkey");
-        return;
+        if (!verifyTweetId) {
+          res.status(403).send("Bad pubkey");
+          return;  
+        }
+
+        const tweet = await getTweet(verifyTweetId);
+        if (!tweet) {
+          res.status(403).send("Failed to fetch tweet");
+          return;  
+        }
+
+        console.log({ tweet })
+        if (!isValidVerifyTweet(tweet, info.pubkey)) {
+          res.status(403).send("Invalid verification tweet");
+          return;  
+        }
       }
   
       // connect
@@ -39,10 +54,10 @@ router.post("/", async (req, res) => {
       const user = {
         username, relays, bunkerUrl, secretKey
       };
-      if (!await connect(user)) {
+      if (!await connect(user, verifyTweetId)) {
         res.status(405).send("Failed to connect to keys");
         return;
-      }  
+      }
 
       // upsert, updating the keys
       result = await upsertUsername(user);
