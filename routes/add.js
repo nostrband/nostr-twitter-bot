@@ -1,5 +1,5 @@
 const express = require("express");
-const { addUsername, getUserSecret, updateUsername } = require("../services/userService");
+const { addUsername, getUserSecret, updateUsername, getUser } = require("../services/userService");
 const { connect } = require("../services/nostrService");
 const { parseBunkerUrl, fetchMentionedPubkey } = require("../services/common");
 const { generatePrivateKey } = require("nostr-tools");
@@ -47,6 +47,12 @@ router.post("/", async (req, res) => {
       // insert
       result = await addUsername(user);
     } else {
+
+      if (!await getUser(username)) {
+        res.status(400).send("User not found, specify bunker url");
+        return;
+      }
+
       // update
       result = await updateUsername({
         username, relays

@@ -57,6 +57,17 @@ async function listUsernames() {
   });
 }
 
+async function getUser(username) {
+  return await prisma.username.findUnique({
+    where: { username },
+    select: {
+      username: true,
+      relays: true,
+      bunkerUrl: true,
+    },
+  });
+}
+
 async function setNextScan(username, sec) {
   await prisma.username.update({
     where: { username },
@@ -71,4 +82,5 @@ module.exports = {
   updateUsername,
   listUsernames,
   setNextScan,
+  getUser,
 };
