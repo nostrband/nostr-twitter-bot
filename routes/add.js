@@ -44,8 +44,8 @@ router.post("/", async (req, res) => {
         return;
       }  
 
-      // insert
-      result = await addUsername(user);
+      // upsert, updating the keys
+      result = await upsertUsername(user);
     } else {
 
       if (!await getUser(username)) {

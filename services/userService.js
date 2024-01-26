@@ -78,7 +78,7 @@ async function setNextScan(username, sec) {
 }
 
 module.exports = {
-  addUsername: upsertUsername,
+  upsertUsername,
   updateUsername,
   listUsernames,
   setNextScan,
