@@ -393,7 +393,8 @@ async function connect(user, verifyTweetId) {
           pubkey,
           content: profile.content,
           tags: [
-            ...profile.tags,
+            ...profile.tags.filter(
+              t => t.length < 2 || t[0] !== 'i' || !t[1].startsWith("twitter:")),
             ["i", `twitter:${user.username}`, verifyTweetId],
           ],
         });
