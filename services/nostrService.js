@@ -77,13 +77,16 @@ function convertToTimestamp(dateString) {
   return Math.floor(dateObject.getTime() / 1000);
 }
 
-function isValidVerifyTweet(tweet, pubkey) {
-  return tweet.text.match(
-    new RegExp(
-      `Verifying my account on nostr\\s+My Public key: "${nip19.npubEncode(
-        pubkey
-      )}"`,
-      "i"
+function isValidVerifyTweet(tweet, username, pubkey) {
+  return (
+    tweet.user.screen_name.toLowerCase() === username &&
+    tweet.text.match(
+      new RegExp(
+        `Verifying my account on nostr\\s+My Public key: "${nip19.npubEncode(
+          pubkey
+        )}"`,
+        "i"
+      )
     )
   );
 }
@@ -139,7 +142,7 @@ async function fetchTwitterPubkey(screenName) {
     if (!tweet) continue;
 
     console.log("Got tweet ", { id: tweet.id_str, text: tweet.text });
-    if (isValidVerifyTweet(tweet, event.pubkey)) {
+    if (isValidVerifyTweet(tweet, screenName, event.pubkey)) {
       console.log("Verified", screenName, event.pubkey);
       mentionedPubkeysCache[screenName] = event.pubkey;
       return event.pubkey;
@@ -394,7 +397,9 @@ async function connect(user, verifyTweetId) {
           content: profile.content,
           tags: [
             ...profile.tags.filter(
-              t => t.length < 2 || t[0] !== 'i' || !t[1].startsWith("twitter:")),
+              (t) =>
+                t.length < 2 || t[0] !== "i" || !t[1].startsWith("twitter:")
+            ),
             ["i", `twitter:${user.username}`, verifyTweetId],
           ],
         });

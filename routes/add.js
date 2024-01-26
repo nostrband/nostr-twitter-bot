@@ -43,7 +43,7 @@ router.post("/", async (req, res) => {
         }
 
         console.log({ tweet })
-        if (!isValidVerifyTweet(tweet, info.pubkey)) {
+        if (!isValidVerifyTweet(tweet, username, info.pubkey)) {
           res.status(403).send("Invalid verification tweet");
           return;  
         }
