@@ -15,6 +15,17 @@ const { formatProfileUrl, formatTweetUrl } = require("./twitterService");
 const OUTBOX_RELAY = "wss://relay.nostr.band";
 const EXIT_RELAY = "wss://relay.exit.pub";
 const RELAYS = [OUTBOX_RELAY, EXIT_RELAY];
+const DEFAULT_RELAYS = [
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://nostr.mutinywallet.com",
+  "wss://nostr.mom",
+  "wss://relay.snort.social",
+  "wss://nostr.wine",
+  "wss://eden.nostr.land",
+  "wss://relay.exit.pub",
+  "wss://relay.nostr.band",
+];
 
 // used to query the wider network
 const fetchNdk = new NDK({
@@ -46,7 +57,7 @@ async function start(user) {
 
   console.log("user", user.username, "relays", user.relays);
   userNdk = new NDK({
-    explicitRelayUrls: user.relays.split(","),
+    explicitRelayUrls: user.relays ? user.relays.split(",") : DEFAULT_RELAYS,
   });
   await userNdk.connect();
 
@@ -193,7 +204,6 @@ async function createEvent(tweet, username) {
 }
 
 async function publishTweetAsNostrEvent(tweet, user) {
-
   const eventPayload = await createEvent(tweet, user.username);
 
   // bad event
