@@ -23,7 +23,10 @@ async function process() {
 
     // connect to proper relays
     console.log("starting for ", user.username);
-    if (!(await startNostr(user))) continue;
+    if (!(await startNostr(user))) {
+      await setNextScan(user.username, 1800);
+      continue;
+    }
 
     // get tweets
     console.log("loading tweets for ", user.username);
