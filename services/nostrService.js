@@ -414,7 +414,7 @@ async function startSigner(user, firstConnect = false) {
           ndk,
         };
       },
-      firstConnect ? 60000 : 3000
+      firstConnect ? 60000 : 10000
     );
   } catch (e) {
     console.log("Failed to connect to", info, e);
