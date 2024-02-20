@@ -4,7 +4,7 @@ function parseBunkerUrl(bunkerUrl) {
     if (url.protocol !== "bunker:") throw new Error("Bad schema");
     return {
       // in NodeJS, it's host, not pathname with //pubkey
-      pubkey: url.host, // url.pathname.split("//")[1],
+      pubkey: url.hostname, // url.pathname.split("//")[1],
       relays: url.searchParams.getAll("relay"),
     };
   } catch (e) {

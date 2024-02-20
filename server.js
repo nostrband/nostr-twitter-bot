@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const bodyParser = require("body-parser");
 const addRoute = require('./routes/add');
 const listRoute = require('./routes/list');
 const historyRoute = require('./routes/history');
@@ -8,7 +9,17 @@ const { process: processTweets } = require('./services/processService');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+
+// json middleware that saves the original body for nip98 auth
+app.use(
+  bodyParser.json({
+    verify: function (req, res, buf, encoding) {
+      req.rawBody = buf;
+    },
+  })
+);
+
+// app.use(express.json());
 
 app.use('/add', addRoute);
 app.use('/list', listRoute);
