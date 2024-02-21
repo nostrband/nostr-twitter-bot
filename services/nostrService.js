@@ -99,27 +99,27 @@ async function fetchTwitterPubkey(screenName) {
     return mentionedPubkeysCache[screenName];
   }
 
-  try {
-    const response = await axios.get(
-      `https://api.nostr.band/v0/twitter_pubkey/${screenName}`
-    );
-    const body = response.data;
-    console.log({ body });
-    if (body.twitter_handle.toLowerCase() === screenName && body.pubkey) {
-      mentionedPubkeysCache[screenName] = body.pubkey;
-      return body.pubkey;
-    }
-  } catch (error) {
-    if (error.response && error.response.status !== 404) {
-      console.error("Error fetching mentioned profile", screenName, error);
-      return undefined;
-    }
-    if (!error.response) {
-      console.error("Error fetching mentioned profile", screenName, error);
-      throw new Error("Failed to fetch using axios");
-    }
-  }
-  console.log("Not found nostr account via API for", screenName);
+  // try {
+  //   const response = await axios.get(
+  //     `https://api.nostr.band/v0/twitter_pubkey/${screenName}`
+  //   );
+  //   const body = response.data;
+  //   console.log({ body });
+  //   if (body.twitter_handle.toLowerCase() === screenName && body.pubkey) {
+  //     mentionedPubkeysCache[screenName] = body.pubkey;
+  //     return body.pubkey;
+  //   }
+  // } catch (error) {
+  //   if (error.response && error.response.status !== 404) {
+  //     console.error("Error fetching mentioned profile", screenName, error);
+  //     return undefined;
+  //   }
+  //   if (!error.response) {
+  //     console.error("Error fetching mentioned profile", screenName, error);
+  //     throw new Error("Failed to fetch using axios");
+  //   }
+  // }
+  // console.log("Not found nostr account via API for", screenName);
 
   const tid = `twitter:${screenName}`;
   const events = await fetchNdk.fetchEvents(
@@ -147,7 +147,7 @@ async function fetchTwitterPubkey(screenName) {
       screenName
     );
     const tweet = await getTweet(tweetId);
-    if (!tweet) continue;
+    if (!tweet || !tweet.id_str) continue;
 
     console.log("Got tweet ", { id: tweet.id_str, text: tweet.text });
     if (isValidVerifyTweet(tweet, screenName, event.pubkey)) {

@@ -58,9 +58,9 @@ async function getTweet(tweetId) {
     .toString(Math.pow(6, 2))
     .replace(/(0+|\.)/g, "");
 
-  const tweetResponse = await axios.get(
-    `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&lang=en&token=${token}`
-  );
+  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}&lang=en&token=${token}`
+  const tweetResponse = await axios.get(url);
+  console.log({ url, tweetResponse });
   await new Promise((ok) => setTimeout(ok, 1000));
 
   return tweetResponse.data;
