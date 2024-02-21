@@ -473,6 +473,8 @@ async function connect(user, verifyTweetId) {
           10000
         );
         console.log("published verification update", user.username, pubkey);
+
+        delete mentionedPubkeysCache[user.username];
       }
     }, 60000);
 

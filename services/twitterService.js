@@ -5,14 +5,15 @@ const { prisma } = require("./db");
 // FIXME maybe use https://status.d420.de/ api?
 const NITTERS = [
   "https://nitter.moomoo.me",
-  "https://nitter.catsarch.com",
-  "https://nitter.freedit.eu",
+  // "https://nitter.catsarch.com",
+  // "https://nitter.freedit.eu",
   "https://nitter.esmailelbob.xyz",
-  "https://nitter.uni-sonia.com",
+  // "https://nitter.uni-sonia.com",
   "https://nitter.kylrth.com",
   "https://nitter.jakefrosty.com",
   "https://nitter.adminforge.de",
   "https://nitter.poast.org",
+  "https://nitter.mint.lgbt",
 ];
 
 // function parseDate(dateString) {
@@ -67,7 +68,7 @@ async function getTweet(tweetId) {
 }
 
 async function getTweets(username) {
-  const nitterUrl = NITTERS[Math.floor(Math.random() * NITTERS.length)];
+  const nitterUrl = process.env.NITTER || NITTERS[Math.floor(Math.random() * NITTERS.length)];
   console.log("Using", nitterUrl, "for", username);
 
   try {
