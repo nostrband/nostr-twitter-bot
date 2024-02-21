@@ -22,6 +22,7 @@ async function upsertUsername({ username, relays, bunkerUrl, secretKey }) {
       relays: formatRelays(relays),
       secretKey,
       bunkerUrl,
+      nextScan: new Date(),
     },
     select: {
       username: true,
