@@ -128,7 +128,7 @@ async function fetchTwitterPubkey(screenName) {
       "#i": [tid],
     },
     {},
-    NDKRelaySet.fromRelayUrls([OUTBOX_RELAY], fetchNdk)
+    NDKRelaySet.fromRelayUrls(DEFAULT_RELAYS, fetchNdk)
   );
 
   console.log("Got verification events for", screenName, events.size);
